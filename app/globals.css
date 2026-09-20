@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/* Tokens, light theme is the primary identity and the default */
+:root {
+  color-scheme: light dark;
+  --bg: #F6F4EC;
+  --card: #FDFCF8;
+  --line: #D8D2C4;
+  --line-subtle: #E7E2D6;
+  --ink: #14261C;
+  --muted: #55645A;
+  --green: #1D4D36;
+  --accent: #B45309;
+  --accent-fill: #D97706;
+  --accent-on: #14261C;
+  --pos: #1A6B48;
+  --neg: #B3362B;
+  --ring: #B45309;
+  --grid: rgba(29, 77, 54, 0.05);
+}
+
+/* Tokens, dark theme, the paired variant of the same system */
+[data-theme="dark"] {
+  --bg: #0C1512;
+  --card: #101B15;
+  --line: #2A3F34;
+  --line-subtle: #1C2C23;
+  --ink: #F2EFE6;
+  --muted: #A3B3A8;
+  --green: #2E7D57;
+  --accent: #E8A33D;
+  --accent-fill: #E8A33D;
+  --accent-on: #14261C;
+  --pos: #3FBF8A;
+  --neg: #F87171;
+  --ring: #E8A33D;
+  --grid: rgba(232, 163, 61, 0.04);
+}
+
+/* Semantic utilities resolve at runtime against the active theme tokens */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-line-subtle: var(--line-subtle);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-green: var(--green);
+  --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-on: var(--accent-on);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-ring: var(--ring);
+}
+
+/* Font roles. The next/font variables live on the html element, so each
+   utility inlines the family directly */
+@utility font-display {
+  font-family: var(--font-display);
+}
+@utility font-body {
+  font-family: var(--font-body);
+}
+@utility font-data {
+  font-family: var(--font-data);
+}
+
+/* Page ground: the 32px chart grid at 1px lines over the bone paper base */
+body {
+  background:
+    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 32px),
+    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 32px),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+/* Theme toggle icons, sun in dark and moon in light, wired off data-theme so
+   the first paint is already correct */
+.gb-icon-sun {
+  display: none;
+}
+.gb-icon-moon {
+  display: block;
+}
+[data-theme="dark"] .gb-icon-sun {
+  display: block;
+}
+[data-theme="dark"] .gb-icon-moon {
+  display: none;
+}
+
+/* Keyboard focus, visible on every control */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Screen reader only, carries the data table twin for the bar rows */
+.gb-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Marker stroke, the signature move: one 300ms amber sweep */
+.gb-marker {
+  background: linear-gradient(
+    104deg,
+    transparent 0.9%,
+    rgba(217, 119, 6, 0.32) 2.4%,
+    rgba(217, 119, 6, 0.3) 97%,
+    transparent 98%
+  );
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  transition: background-size 300ms ease-out;
+}
+.gb-marker[data-on="true"] {
+  background-size: 100% 100%;
+}
+
+/* Skeleton bars for the computing state */
+.gb-skeleton {
+  height: 14px;
+  border-radius: 0;
+  background: linear-gradient(
+    90deg,
+    var(--line-subtle) 25%,
+    var(--line) 50%,
+    var(--line-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: gb-sk 1.2s infinite;
+}
+@keyframes gb-sk {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Sheet zones cascade in, 40ms stagger applied inline, 200ms, once */
+.gb-zone-in {
+  animation: gb-zone 200ms ease-out both;
+}
+@keyframes gb-zone {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gb-marker {
+    transition: none;
+    background-size: 100% 100%;
+  }
+  .gb-skeleton {
+    animation: none;
+  }
+  .gb-zone-in {
+    animation: none;
+  }
+}

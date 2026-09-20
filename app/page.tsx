@@ -1,0 +1,55 @@
+import BriefSection, { type BriefState } from "./components/brief-section";
+import ThemeToggle from "./components/theme-toggle";
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ state?: string }>;
+}) {
+  const params = await searchParams;
+  const initialState: BriefState = params.state === "error" ? "error" : "empty";
+
+  return (
+    <>
+      <header className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between gap-4 px-6">
+        <span className="font-display text-[24px] tracking-[0.08em]">
+          GAPBRIEF
+        </span>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="border border-green px-3 py-[3px] text-[12.5px] font-semibold text-green">
+            US MARKET CLOSED,{" "}
+            <b className="font-semibold text-accent">rTOKENS LIVE</b>
+          </span>
+          <span className="font-data text-[12px] tabular-nums text-muted">
+            DATA 21:32 UTC
+          </span>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <div className="h-2.5 w-full bg-green" />
+
+      <main className="mx-auto w-full max-w-[1200px] px-6 pb-16 pt-10">
+        <h1 className="max-w-[16ch] text-balance font-display text-[clamp(44px,7vw,76px)] font-normal uppercase leading-[0.95] tracking-[0.01em]">
+          What are you holding through the close?
+        </h1>
+        <p className="mt-3 max-w-[52ch] text-muted">
+          A stress-test brief for tokenized US stock positions while the market
+          is shut. DESIGN PREVIEW. Every number on this sheet is SAMPLE data,
+          labeled as such. Live data replaces it in the build.
+        </p>
+        <div className="mt-5 h-1.5 w-[72px] bg-accent-fill" />
+
+        <BriefSection initialState={initialState} />
+      </main>
+
+      <footer className="mx-auto flex w-full max-w-[1200px] flex-wrap justify-between gap-x-6 gap-y-2 border-t border-line-subtle px-6 pb-10 pt-4 text-[12px] text-muted">
+        <span>GapBrief, hackathon build in progress</span>
+        <span className="font-data tabular-nums">
+          SOURCES: BITGET SPOT, MCP US EQUITY K-LINES
+        </span>
+        <span>Not financial advice. Educational tool.</span>
+      </footer>
+    </>
+  );
+}
