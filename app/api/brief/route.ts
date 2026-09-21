@@ -4,13 +4,8 @@ import { deltaPct } from "@/lib/delta";
 import {
   computeGaps,
   lastCompletedSession,
-  type CandleRow,
 } from "@/lib/gaps";
-import {
-  extractText,
-  lastMessagePayload,
-  parseRows,
-} from "@/lib/mcp-parse";
+import { fetchEquityRows } from "@/lib/mcp-page";
 import { marketState } from "@/lib/market-state";
 import { deskRead } from "@/lib/qwen";
 import { UNDERLYING_BY_RTOKEN } from "@/lib/symbols";
@@ -18,7 +13,6 @@ import { UNDERLYING_BY_RTOKEN } from "@/lib/symbols";
 export const dynamic = "force-dynamic";
 
 const TICKERS_URL = "https://api.bitget.com/api/v2/spot/market/tickers";
-const MCP_URL = "https://agent.bitget.com/mcp";
 const FETCH_TIMEOUT_MS = 15000;
 const FEED_ERROR =
   "The data feed failed to respond. Check your connection and try again.";
@@ -62,74 +56,19 @@ async function fetchTokenLast(symbol: string): Promise<number> {
   return pickLast(body);
 }
 
-/* MCP JSON-RPC over streamable HTTP: initialize, capture the session
-   id, send the initialized notification, then call the tool */
-async function mcpPost(body: unknown, sessionId: string): Promise<Response> {
-  return fetchWithRetry(MCP_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      ...(sessionId ? { "mcp-session-id": sessionId } : {}),
-    },
-    cache: "no-store",
-    body: JSON.stringify(body),
-  });
-}
-
+/* Five-year window through the paged equity feed. One call walks every
+   page in response order, so the last close and the gap counts see the
+   full window, never page one only. */
 async function fetchCandles(
   underlying: string,
   now: Date,
-): Promise<CandleRow[]> {
-  const initResponse = await mcpPost(
-    {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2024-11-05",
-        capabilities: {},
-        clientInfo: { name: "gapbrief", version: "0.2.0" },
-      },
-    },
-    "",
-  );
-  const sessionId = initResponse.headers.get("mcp-session-id") ?? "";
-  await initResponse.text();
-
-  await mcpPost(
-    { jsonrpc: "2.0", method: "notifications/initialized" },
-    sessionId,
-  );
-
-  const callResponse = await mcpPost(
-    {
-      jsonrpc: "2.0",
-      id: 2,
-      method: "tools/call",
-      params: {
-        name: "do_query",
-        arguments: {
-          entry_id: "equity_price_historical",
-          params: {
-            symbol: underlying,
-            start_date: isoDaysAgo(now, YEARS * 365),
-            /* The window ends yesterday UTC, so the final row of the
-               feed is always a completed session, never today's
-               mid-session snapshot with its partial close */
-            end_date: isoDaysAgo(now, 1),
-          },
-        },
-      },
-    },
-    sessionId,
-  );
-  const body = await callResponse.text();
-  const payload = lastMessagePayload(body);
-  if (!payload) {
-    throw new Error("MCP response carried no payload");
-  }
-  return parseRows(extractText(payload));
+): Promise<import("@/lib/gaps").CandleRow[]> {
+  const startDate = isoDaysAgo(now, YEARS * 365);
+  /* The window ends yesterday UTC, so the final row of the feed is
+     always a completed session, never today's mid-session snapshot
+     with its partial close */
+  const endDate = isoDaysAgo(now, 1);
+  return fetchEquityRows(underlying, startDate, endDate);
 }
 
 export async function GET(request: Request): Promise<Response> {
