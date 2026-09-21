@@ -1,0 +1,172 @@
+import { NextResponse } from "next/server";
+import { pickLast } from "@/lib/bitget-parse";
+import { deltaPct } from "@/lib/delta";
+import { computeGaps, type CandleRow } from "@/lib/gaps";
+import {
+  extractText,
+  lastMessagePayload,
+  parseRows,
+} from "@/lib/mcp-parse";
+import { marketState } from "@/lib/market-state";
+import { UNDERLYING_BY_RTOKEN } from "@/lib/symbols";
+
+export const dynamic = "force-dynamic";
+
+const TICKERS_URL = "https://api.bitget.com/api/v2/spot/market/tickers";
+const MCP_URL = "https://agent.bitget.com/mcp";
+const FETCH_TIMEOUT_MS = 15000;
+const FEED_ERROR =
+  "The data feed failed to respond. Check your connection and try again.";
+
+const DAY_MS = 86_400_000;
+
+function isoDaysAgo(days: number): string {
+  return new Date(Date.now() - days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function isoToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/* Every fetch runs with a hard timeout and retries once on failure
+   before the error surfaces */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        throw new Error(`Feed status ${response.status}`);
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+/* Bitget public spot ticker, no key needed */
+async function fetchTokenLast(symbol: string): Promise<number> {
+  const response = await fetchWithRetry(
+    `${TICKERS_URL}?symbol=${symbol}`,
+    { cache: "no-store" },
+  );
+  const body = (await response.json()) as unknown;
+  return pickLast(body);
+}
+
+/* MCP JSON-RPC over streamable HTTP: initialize, capture the session
+   id, send the initialized notification, then call the tool */
+async function mcpPost(body: unknown, sessionId: string): Promise<Response> {
+  return fetchWithRetry(MCP_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      ...(sessionId ? { "mcp-session-id": sessionId } : {}),
+    },
+    cache: "no-store",
+    body: JSON.stringify(body),
+  });
+}
+
+async function fetchCandles(underlying: string): Promise<CandleRow[]> {
+  const initResponse = await mcpPost(
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "gapbrief", version: "0.2.0" },
+      },
+    },
+    "",
+  );
+  const sessionId = initResponse.headers.get("mcp-session-id") ?? "";
+  await initResponse.text();
+
+  await mcpPost(
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    sessionId,
+  );
+
+  const callResponse = await mcpPost(
+    {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "do_query",
+        arguments: {
+          entry_id: "equity_price_historical",
+          params: {
+            symbol: underlying,
+            start_date: isoDaysAgo(5 * 365),
+            end_date: isoToday(),
+          },
+        },
+      },
+    },
+    sessionId,
+  );
+  const body = await callResponse.text();
+  const payload = lastMessagePayload(body);
+  if (!payload) {
+    throw new Error("MCP response carried no payload");
+  }
+  return parseRows(extractText(payload));
+}
+
+export async function GET(request: Request): Promise<Response> {
+  const params = new URL(request.url).searchParams;
+  const ticker = (params.get("ticker") ?? "").trim().toUpperCase();
+  const underlying = UNDERLYING_BY_RTOKEN[ticker];
+  if (!underlying) {
+    return NextResponse.json(
+      {
+        error:
+          "Pick one of the four tokens on the sheet: RNVDAUSDT, RTSLAUSDT, RSPYUSDT or RMSTRUSDT.",
+      },
+      { status: 400 },
+    );
+  }
+  const position = Number(params.get("position"));
+  if (!Number.isFinite(position) || position <= 0) {
+    return NextResponse.json(
+      { error: "Enter a position size as a number greater than zero." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const tokenLast = await fetchTokenLast(ticker);
+    const rows = (await fetchCandles(underlying)).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    if (rows.length < 2) {
+      throw new Error("Not enough candles to compute a brief");
+    }
+    const lastClose = rows[rows.length - 1].close;
+
+    return NextResponse.json({
+      ticker,
+      underlying,
+      price: {
+        last: tokenLast,
+        lastClose,
+        deltaPct: deltaPct(tokenLast, lastClose),
+      },
+      gaps: computeGaps(rows, 5),
+      marketState: marketState(new Date()),
+      generatedAt: new Date().toISOString(),
+    });
+  } catch {
+    return NextResponse.json({ error: FEED_ERROR }, { status: 502 });
+  }
+}

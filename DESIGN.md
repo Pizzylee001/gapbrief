@@ -97,7 +97,7 @@ Production load line (final form set in the build brief): next/font/google, Beba
 - Brief sheet: card background, 1px border, 0 radius, no shadow. Structure is two-column asymmetric on desktop: left 5 columns carry "THE DESK'S READ" and the options, right 7 columns carry the token line, gap history, and analogs, separated by a 1px vertical hairline. Below 1024px: single column, read first.
 - Token line: mono 20px price, muted comparison, direction-colored delta, under a forest band head.
 - Gap history: diverging bar rows, mono labels, green left of center and amber-red right of center from a center axis, track in borderSubtle, hidden data table twin for screen readers.
-- Analogs: editorial rows: giant mono date, event name in body, "MONDAY OPEN -2.1%" stamp in direction color, separated by hairlines.
+- Analogs: editorial rows: giant mono date, event name in body, "WEEKEND OPEN -2.1%" stamp in direction color, separated by hairlines.
 - Options: three rows, each led by a mono tag (HOLD, TRIM, HEDGE) in a forest outline box, followed by one plain sentence.
 - Desk read: the model's paragraph, with its key clause under the marker stroke: a 300ms amber highlight sweep, once, reduced motion shows it instantly.
 - States, all four real: empty (cause plus next action, same chrome), computing (skeleton rows shaped like each zone, zone labels visible, shimmer disabled under reduced motion), populated, error (cause plus fix, RETRY button returns to empty).
@@ -126,3 +126,4 @@ Signature (one): the marker stroke. In the desk read, the key clause receives a 
 Reveal: sheet zones cascade top-down as computed, 40ms stagger, 200ms ease-out, once, never re-hidden on scroll.
 Hover: border and fill shifts at 150ms. No parallax, no scroll choreography, no page entrance animation.
 Depth: flat print, zero shadows, rules and bands carry structure. Reason: the sheet reads as printed output, and elevation would lie about the medium.
+Note (phase 2): the marker sweep now fires on the real read placeholder until phase 3, when the model writes the paragraph.

@@ -1,17 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ComputingBody,
   EmptyBody,
   ErrorBody,
   PopulatedBody,
 } from "./brief-bodies";
+import type { BriefData } from "@/lib/types";
 
 export type BriefState = "empty" | "computing" | "populated" | "error";
 
-/* SAMPLE tickers, the real symbols this phase runs on */
 const TICKERS = ["RNVDAUSDT", "RTSLAUSDT", "RSPYUSDT", "RMSTRUSDT"];
+
+/* Formats the server generatedAt stamp as UTC */
+function computedStamp(generatedAt: string): string {
+  return `COMPUTED ${generatedAt.slice(0, 10)} ${generatedAt.slice(11, 19)} UTC`;
+}
 
 export default function BriefSection({
   initialState = "empty",
@@ -21,16 +26,8 @@ export default function BriefSection({
   const [ticker, setTicker] = useState(TICKERS[0]);
   const [position, setPosition] = useState("20");
   const [state, setState] = useState<BriefState>(initialState);
+  const [brief, setBrief] = useState<BriefData | null>(null);
   const [swept, setSwept] = useState(false);
-  const timerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-      }
-    };
-  }, []);
 
   /* The marker sweep fires once per computed brief */
   useEffect(() => {
@@ -42,12 +39,29 @@ export default function BriefSection({
     return () => cancelAnimationFrame(frame);
   }, [state]);
 
-  function runBrief() {
+  /* Runs the real brief against the API, the 900ms fake wait is gone */
+  async function runBrief() {
     if (state === "computing") {
       return;
     }
     setState("computing");
-    timerRef.current = window.setTimeout(() => setState("populated"), 900);
+    try {
+      const response = await fetch(
+        `/api/brief?ticker=${encodeURIComponent(ticker)}&position=${encodeURIComponent(
+          position,
+        )}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        setState("error");
+        return;
+      }
+      const data = (await response.json()) as BriefData;
+      setBrief(data);
+      setState("populated");
+    } catch {
+      setState("error");
+    }
   }
 
   /* RNVDAUSDT reads as rNVDA on the sheet */
@@ -115,19 +129,22 @@ export default function BriefSection({
         <div className="flex items-baseline justify-between gap-3 border-b border-line px-6 py-4">
           <span className="font-display text-[22px] tracking-[0.04em]">
             {tickerLabel}
-            <span className="ml-2.5 border border-accent px-1.5 py-px align-[2px] font-data text-[11px] font-medium text-accent">
-              SAMPLE
-            </span>
           </span>
           <span className="font-data text-[11px] font-medium tabular-nums text-muted">
-            {state === "error" ? "FEED ERROR" : "COMPUTED 21:33:04 UTC"}
+            {state === "error"
+              ? "FEED ERROR"
+              : brief
+                ? computedStamp(brief.generatedAt)
+                : "NOT COMPUTED YET"}
           </span>
         </div>
 
         {state === "empty" ? <EmptyBody /> : null}
         {state === "computing" ? <ComputingBody /> : null}
-        {state === "populated" ? <PopulatedBody swept={swept} /> : null}
-        {state === "error" ? <ErrorBody onRetry={() => setState("empty")} /> : null}
+        {state === "populated" && brief ? (
+          <PopulatedBody swept={swept} data={brief} />
+        ) : null}
+        {state === "error" ? <ErrorBody onRetry={runBrief} /> : null}
       </section>
     </>
   );

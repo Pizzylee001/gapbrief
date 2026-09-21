@@ -1,6 +1,18 @@
 import type { ReactNode } from "react";
+import { GAP_BUCKETS } from "@/lib/gaps";
+import type { BriefData } from "@/lib/types";
 
-/* SAMPLE gap history: bucket label, fill share of the half track, week count */
+/* Direction color of each gap bucket, neg bars grow left of center */
+const BUCKET_DIR: Record<string, "neg" | "pos"> = {
+  "< -4%": "neg",
+  "-4 to -2%": "neg",
+  "-2 to 0%": "neg",
+  "0 to +2%": "pos",
+  "+2 to +4%": "pos",
+  "> +4%": "pos",
+};
+
+/* Gap history row shape, kept for the computing skeleton only */
 const GAP_ROWS = [
   { label: "< -4%", fill: 6, count: "4 wks", dir: "neg" },
   { label: "-4 to -2%", fill: 14, count: "11 wks", dir: "neg" },
@@ -8,13 +20,6 @@ const GAP_ROWS = [
   { label: "0 to +2%", fill: 28, count: "22 wks", dir: "pos" },
   { label: "+2 to +4%", fill: 15, count: "12 wks", dir: "pos" },
   { label: "> +4%", fill: 7, count: "5 wks", dir: "pos" },
-];
-
-/* SAMPLE weekend analogs with the Monday open that followed */
-const EVENTS = [
-  { date: "2025-06-14", name: "Strike on the Strait of Hormuz", delta: "-2.1%" },
-  { date: "2024-08-03", name: "Carry-trade unwind, yen surge", delta: "-6.8%" },
-  { date: "2023-10-07", name: "Attack on Israel", delta: "-1.2%" },
 ];
 
 /* SAMPLE desk options */
@@ -132,7 +137,7 @@ export function ComputingBody() {
             <Skel className="h-5 w-16" />
           </div>
         </Zone>
-        <Zone title="Monday gap history, 5 years" stamp="SAMPLE DATA" delay={120}>
+        <Zone title="Gap history" stamp="BITGET US EQUITY FEED" delay={120}>
           <div className="flex flex-col gap-1.5">
             {GAP_ROWS.map((row) => (
               <div
@@ -148,7 +153,7 @@ export function ComputingBody() {
         </Zone>
         <Zone
           title="Weekends that looked like this one"
-          stamp="SAMPLE DATA"
+          stamp="BITGET US EQUITY FEED"
           delay={160}
         >
           <div className="flex flex-col gap-3">
@@ -169,8 +174,17 @@ export function ComputingBody() {
   );
 }
 
-/* The computed sheet, every number on it is SAMPLE data */
-export function PopulatedBody({ swept }: { swept: boolean }) {
+/* The computed sheet, gaps and price are live, the read and options
+   stay SAMPLE until the model phase */
+export function PopulatedBody({
+  swept,
+  data,
+}: {
+  swept: boolean;
+  data: BriefData;
+}) {
+  const { last, lastClose, deltaPct } = data.price;
+  const total = data.gaps.totalWeekends;
   return (
     <div className={COLUMNS}>
       <div className={LEFT_COLUMN}>
@@ -204,56 +218,76 @@ export function PopulatedBody({ swept }: { swept: boolean }) {
       <div className={RIGHT_COLUMN}>
         <Zone title="Where the token sits now" stamp="BITGET SPOT" first delay={80}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="font-data text-[20px] tabular-nums">219.26</span>
+            <span className="font-data text-[20px] tabular-nums">{last}</span>
             <span className="font-data text-[12.5px] tabular-nums text-muted">
-              last US close 218.40
+              last US close {lastClose}
             </span>
-            <span className="font-data text-[20px] tabular-nums text-pos">
-              +0.39%
+            <span
+              className={`font-data text-[20px] tabular-nums ${
+                deltaPct < 0 ? "text-neg" : "text-pos"
+              }`}
+            >
+              {deltaPct < 0 ? "" : "+"}
+              {deltaPct}%
             </span>
           </div>
         </Zone>
-        <Zone title="Monday gap history, 5 years" stamp="SAMPLE DATA" delay={120}>
+        <Zone
+          title={`Gap history, last ${total} weekends`}
+          stamp="BITGET US EQUITY FEED"
+          delay={120}
+        >
           <div
             className="flex flex-col gap-1.5"
             role="img"
-            aria-label="Distribution of Friday close to Monday open gaps, sample data"
+            aria-label="Distribution of Friday close to next week open gaps, Bitget US equity feed"
           >
-            {GAP_ROWS.map((row) => (
-              <div
-                key={row.label}
-                className="grid grid-cols-[72px_1fr_52px] items-center gap-2.5 font-data text-xs tabular-nums text-muted"
-              >
-                <span>{row.label}</span>
-                <div className="relative h-3.5 overflow-hidden bg-line-subtle">
-                  <div
-                    className={`absolute bottom-0 top-0 ${
-                      row.dir === "pos"
-                        ? "left-1/2 bg-pos"
-                        : "right-1/2 bg-neg"
-                    }`}
-                    style={{ width: `${row.fill}%` }}
-                  />
+            {GAP_BUCKETS.map((label) => {
+              const count = data.gaps.buckets[label];
+              const fill = total > 0 ? (count / total) * 100 : 0;
+              return (
+                <div
+                  key={label}
+                  className="grid grid-cols-[72px_1fr_52px] items-center gap-2.5 font-data text-xs tabular-nums text-muted"
+                >
+                  <span>{label}</span>
+                  <div className="relative h-3.5 overflow-hidden bg-line-subtle">
+                    <div
+                      className={`absolute bottom-0 top-0 ${
+                        BUCKET_DIR[label] === "pos"
+                          ? "left-1/2 bg-pos"
+                          : "right-1/2 bg-neg"
+                      }`}
+                      style={{ width: `${fill}%` }}
+                    />
+                  </div>
+                  <span>{count} wks</span>
                 </div>
-                <span>{row.count}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <table className="gb-visually-hidden">
-            <caption>Monday gap history, five years, sample data</caption>
+            <caption>
+              Gap history, last five years, Bitget US equity feed
+            </caption>
             <thead>
               <tr>
                 <th scope="col">Gap bucket</th>
-                <th scope="col">Share of weeks</th>
-                <th scope="col">Weeks</th>
+                <th scope="col">Share of weekends</th>
+                <th scope="col">Weekends</th>
               </tr>
             </thead>
             <tbody>
-              {GAP_ROWS.map((row) => (
-                <tr key={row.label}>
-                  <th scope="row">{row.label}</th>
-                  <td>{row.fill} percent</td>
-                  <td>{row.count}</td>
+              {GAP_BUCKETS.map((label) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td>
+                    {total > 0
+                      ? ((data.gaps.buckets[label] / total) * 100).toFixed(1)
+                      : "0.0"}{" "}
+                    percent
+                  </td>
+                  <td>{data.gaps.buckets[label]}</td>
                 </tr>
               ))}
             </tbody>
@@ -261,15 +295,15 @@ export function PopulatedBody({ swept }: { swept: boolean }) {
         </Zone>
         <Zone
           title="Weekends that looked like this one"
-          stamp="SAMPLE DATA"
+          stamp="BITGET US EQUITY FEED"
           delay={160}
         >
           <div className="flex flex-col">
-            {EVENTS.map((event, index) => (
+            {data.gaps.top.map((event, index) => (
               <div
                 key={event.date}
-                className={`grid grid-cols-[110px_1fr_auto] items-baseline gap-3 py-2.5 text-sm${
-                  index < EVENTS.length - 1
+                className={`grid grid-cols-1 gap-1 py-2.5 text-sm sm:grid-cols-[110px_1fr_auto] sm:items-baseline sm:gap-3${
+                  index < data.gaps.top.length - 1
                     ? " border-b border-line-subtle"
                     : ""
                 }`}
@@ -277,9 +311,15 @@ export function PopulatedBody({ swept }: { swept: boolean }) {
                 <span className="font-data text-[13px] tabular-nums text-muted">
                   {event.date}
                 </span>
-                <span>{event.name}</span>
+                <span>Worst gaps from the last five years</span>
                 <span className="font-data text-[12.5px] tabular-nums text-muted">
-                  MON OPEN <span className="text-neg">{event.delta}</span>
+                  WEEKEND OPEN{" "}
+                  <span
+                    className={event.gapPct < 0 ? "text-neg" : "text-pos"}
+                  >
+                    {event.gapPct < 0 ? "" : "+"}
+                    {event.gapPct}%
+                  </span>
                 </span>
               </div>
             ))}

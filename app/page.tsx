@@ -1,3 +1,4 @@
+import { marketState } from "@/lib/market-state";
 import BriefSection, { type BriefState } from "./components/brief-section";
 import ThemeToggle from "./components/theme-toggle";
 
@@ -9,6 +10,17 @@ export default async function Home({
   const params = await searchParams;
   const initialState: BriefState = params.state === "error" ? "error" : "empty";
 
+  /* Masthead chip follows the same real clock logic as the brief */
+  const now = new Date();
+  const state = marketState(now);
+  const chip =
+    state === "open"
+      ? { lead: "US MARKET OPEN", live: "" }
+      : state === "weekend"
+        ? { lead: "WEEKEND,", live: "rTOKENS LIVE" }
+        : { lead: "US MARKET CLOSED,", live: "rTOKENS LIVE" };
+  const dataStamp = `DATA ${now.toISOString().slice(11, 16)} UTC`;
+
   return (
     <>
       <header className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between gap-4 px-6">
@@ -17,11 +29,13 @@ export default async function Home({
         </span>
         <div className="flex flex-wrap items-center gap-4">
           <span className="border border-green px-3 py-[3px] text-[12.5px] font-semibold text-green">
-            US MARKET CLOSED,{" "}
-            <b className="font-semibold text-accent">rTOKENS LIVE</b>
+            {chip.lead}{" "}
+            {chip.live ? (
+              <b className="font-semibold text-accent">{chip.live}</b>
+            ) : null}
           </span>
           <span className="font-data text-[12px] tabular-nums text-muted">
-            DATA 21:32 UTC
+            {dataStamp}
           </span>
           <ThemeToggle />
         </div>
@@ -34,9 +48,8 @@ export default async function Home({
           What are you holding through the close?
         </h1>
         <p className="mt-3 max-w-[52ch] text-muted">
-          A stress-test brief for tokenized US stock positions while the market
-          is shut. DESIGN PREVIEW. Every number on this sheet is SAMPLE data,
-          labeled as such. Live data replaces it in the build.
+          Live data from Bitget spot and Bitget's US equity feed. The desk's
+          read and options are still sample outputs until the model phase.
         </p>
         <div className="mt-5 h-1.5 w-[72px] bg-accent-fill" />
 
