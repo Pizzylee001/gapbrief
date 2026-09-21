@@ -126,4 +126,4 @@ Signature (one): the marker stroke. In the desk read, the key clause receives a 
 Reveal: sheet zones cascade top-down as computed, 40ms stagger, 200ms ease-out, once, never re-hidden on scroll.
 Hover: border and fill shifts at 150ms. No parallax, no scroll choreography, no page entrance animation.
 Depth: flat print, zero shadows, rules and bands carry structure. Reason: the sheet reads as printed output, and elevation would lie about the medium.
-Note (phase 2): the marker sweep now fires on the real read placeholder until phase 3, when the model writes the paragraph.
+Note (phase 3): the marker sweep runs on the final sentence of the model read, the paragraph Qwen writes from the computed numbers. The options zone keeps its NOT FINANCIAL ADVICE stamp; its three rows are template sentences composed from the measured bucket shares, not model text, and the funding number in HEDGE keeps its SAMPLE marker because it is not computed in this brief.

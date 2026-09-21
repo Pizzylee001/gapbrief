@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { GAP_BUCKETS } from "@/lib/gaps";
+import { optionRows } from "@/lib/options";
+import { splitFinalSentence } from "@/lib/read-text";
+import { stampForSource } from "@/lib/types";
 import type { BriefData } from "@/lib/types";
 
 /* Direction color of each gap bucket, neg bars grow left of center */
@@ -20,22 +23,6 @@ const GAP_ROWS = [
   { label: "0 to +2%", fill: 28, count: "22 wks", dir: "pos" },
   { label: "+2 to +4%", fill: 15, count: "12 wks", dir: "pos" },
   { label: "> +4%", fill: 7, count: "5 wks", dir: "pos" },
-];
-
-/* SAMPLE desk options */
-const OPTIONS = [
-  {
-    tag: "HOLD",
-    text: "58 percent of this stock’s Mondays opened flat to up, and the token already reflects the Saturday move.",
-  },
-  {
-    tag: "TRIM",
-    text: "Selling 25 percent before Monday open caps the worst historical bucket at a known cost.",
-  },
-  {
-    tag: "HEDGE",
-    text: "A short perp position of equal size has carried a funding cost near 0.01% per hour, SAMPLE.",
-  },
 ];
 
 const COLUMNS = "grid grid-cols-1 lg:grid-cols-[5fr_1px_7fr]";
@@ -174,8 +161,10 @@ export function ComputingBody() {
   );
 }
 
-/* The computed sheet, gaps and price are live, the read and options
-   stay SAMPLE until the model phase */
+/* The computed sheet, every zone reads the API payload: the read is
+   the model's paragraph with its final sentence under the marker
+   stroke, the options are template sentences composed from the
+   measured bucket shares */
 export function PopulatedBody({
   swept,
   data,
@@ -185,22 +174,31 @@ export function PopulatedBody({
 }) {
   const { last, lastClose, deltaPct } = data.price;
   const total = data.gaps.totalWeekends;
+  const { body, final } = splitFinalSentence(data.read);
+  const options = optionRows(data.gaps);
   return (
     <div className={COLUMNS}>
       <div className={LEFT_COLUMN}>
-        <Zone title="The desk’s read" first delay={0}>
-          <p className="text-base">
-            SAMPLE: The token trades 0.39 percent above Friday’s close, which
-            says the overnight crowd already leaned bullish.{" "}
+        <Zone
+          title="The desk’s read"
+          stamp={stampForSource(data.readSource)}
+          first
+          delay={0}
+        >
+          <p
+            className={`text-base${
+              data.readSource === "fallback" ? " text-muted" : ""
+            }`}
+          >
+            {body ? `${body} ` : null}
             <span className="gb-marker" data-on={swept ? "true" : "false"}>
-              In the five historical analogs, the average Monday open was down
-              2.5 percent, but three of five recovered within two sessions.
+              {final}
             </span>
           </p>
         </Zone>
         <Zone title="Options on the desk" stamp="NOT FINANCIAL ADVICE" delay={40}>
           <div className="mt-1 flex flex-col gap-3">
-            {OPTIONS.map((option) => (
+            {options.map((option) => (
               <div
                 key={option.tag}
                 className="flex items-baseline gap-3 text-[14.5px]"
@@ -220,7 +218,7 @@ export function PopulatedBody({
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="font-data text-[20px] tabular-nums">{last}</span>
             <span className="font-data text-[12.5px] tabular-nums text-muted">
-              last US close {lastClose}
+              last close ({data.sessionCloseDate}) {lastClose}
             </span>
             <span
               className={`font-data text-[20px] tabular-nums ${

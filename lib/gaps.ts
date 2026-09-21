@@ -81,13 +81,23 @@ const MAX_WEEKEND_SPAN_DAYS = 6;
    open of the next. Sessions are walked in date order; only spans that
    cross a Saturday or Sunday count, so a holiday Monday stretches the
    gap to the next trading day instead of losing the weekend. Spans
-   longer than six days are feed holes and are skipped. The years
-   window keeps only weekends whose open falls inside the last N years
-   of the provided rows. */
-export function computeGaps(rows: CandleRow[], years: number): GapResult {
+   longer than six days are feed holes and are skipped. Rows dated on
+   or after the reference UTC day are mid-session snapshots with a
+   partial close, so they are dropped before anything is measured. The
+   years window keeps only weekends whose open falls inside the last N
+   years of the provided rows. */
+export function computeGaps(
+  rows: CandleRow[],
+  years: number,
+  nowUtc: Date = new Date(),
+): GapResult {
+  const today = nowUtc.toISOString().slice(0, 10);
   const byDay = new Map<number, CandleRow>();
   for (const row of rows) {
-    byDay.set(parseUtc(row.date), row);
+    if (dayIso(row.date) >= today) {
+      continue;
+    }
+    byDay.set(parseUtc(dayIso(row.date)), row);
   }
   const days = [...byDay.keys()].sort((a, b) => a - b);
   const windowStart = days[days.length - 1] - years * 365 * DAY_MS;
@@ -121,4 +131,58 @@ export function computeGaps(rows: CandleRow[], years: number): GapResult {
     .slice(0, 5);
 
   return { totalWeekends: events.length, buckets, top };
+}
+
+/* The most recent row that is a completed session: its calendar date
+   must be strictly before the current UTC date, so a mid-session
+   snapshot of today, which carries a partial close, is never the
+   compare point for the live token price. Returns null when nothing in
+   the feed qualifies. */
+export function lastCompletedSession(
+  rows: CandleRow[],
+  nowUtc: Date,
+): CandleRow | null {
+  const today = nowUtc.toISOString().slice(0, 10);
+  let closed: CandleRow | null = null;
+  for (const row of rows) {
+    const day = dayIso(row.date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day >= today) {
+      continue;
+    }
+    if (!closed || day >= dayIso(closed.date)) {
+      closed = row;
+    }
+  }
+  return closed;
+}
+
+/* Share of the measured weekends that landed in the given buckets, in
+   percent with one decimal, counted from the raw bucket counts. */
+export function bucketSharePct(result: GapResult, labels: string[]): number {
+  if (result.totalWeekends <= 0) {
+    return 0;
+  }
+  let count = 0;
+  for (const label of labels) {
+    count += result.buckets[label] ?? 0;
+  }
+  return Math.round((count / result.totalWeekends) * 1000) / 10;
+}
+
+/* Every bucket ranked by its share of the measured weekends, biggest
+   first. Ties keep the declared bucket order, so a result with no
+   measured weekends still reads in the documented order. */
+export function rankedBuckets(
+  result: GapResult,
+): Array<{ label: string; sharePct: number }> {
+  const ranked = GAP_BUCKETS.map((label, index) => ({
+    label,
+    count: result.buckets[label] ?? 0,
+    index,
+  }));
+  ranked.sort((a, b) => b.count - a.count || a.index - b.index);
+  return ranked.map(({ label }) => ({
+    label,
+    sharePct: bucketSharePct(result, [label]),
+  }));
 }

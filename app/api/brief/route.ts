@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { pickLast } from "@/lib/bitget-parse";
 import { deltaPct } from "@/lib/delta";
-import { computeGaps, type CandleRow } from "@/lib/gaps";
+import {
+  computeGaps,
+  lastCompletedSession,
+  type CandleRow,
+} from "@/lib/gaps";
 import {
   extractText,
   lastMessagePayload,
   parseRows,
 } from "@/lib/mcp-parse";
 import { marketState } from "@/lib/market-state";
+import { deskRead } from "@/lib/qwen";
 import { UNDERLYING_BY_RTOKEN } from "@/lib/symbols";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +24,11 @@ const FEED_ERROR =
   "The data feed failed to respond. Check your connection and try again.";
 
 const DAY_MS = 86_400_000;
+const YEARS = 5;
 
-function isoDaysAgo(days: number): string {
-  return new Date(Date.now() - days * DAY_MS).toISOString().slice(0, 10);
-}
-
-function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
+/* Request dates are YYYY-MM-DD in UTC */
+function isoDaysAgo(now: Date, days: number): string {
+  return new Date(now.getTime() - days * DAY_MS).toISOString().slice(0, 10);
 }
 
 /* Every fetch runs with a hard timeout and retries once on failure
@@ -74,7 +77,10 @@ async function mcpPost(body: unknown, sessionId: string): Promise<Response> {
   });
 }
 
-async function fetchCandles(underlying: string): Promise<CandleRow[]> {
+async function fetchCandles(
+  underlying: string,
+  now: Date,
+): Promise<CandleRow[]> {
   const initResponse = await mcpPost(
     {
       jsonrpc: "2.0",
@@ -107,8 +113,11 @@ async function fetchCandles(underlying: string): Promise<CandleRow[]> {
           entry_id: "equity_price_historical",
           params: {
             symbol: underlying,
-            start_date: isoDaysAgo(5 * 365),
-            end_date: isoToday(),
+            start_date: isoDaysAgo(now, YEARS * 365),
+            /* The window ends yesterday UTC, so the final row of the
+               feed is always a completed session, never today's
+               mid-session snapshot with its partial close */
+            end_date: isoDaysAgo(now, 1),
           },
         },
       },
@@ -145,14 +154,39 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
+    const now = new Date();
     const tokenLast = await fetchTokenLast(ticker);
-    const rows = (await fetchCandles(underlying)).sort((a, b) =>
+    const rows = (await fetchCandles(underlying, now)).sort((a, b) =>
       a.date.localeCompare(b.date),
     );
     if (rows.length < 2) {
       throw new Error("Not enough candles to compute a brief");
     }
-    const lastClose = rows[rows.length - 1].close;
+
+    /* The rToken trades 7x24, so the live price is always compared
+       against the most recent completed session close, never against a
+       mid-session snapshot */
+    const closed = lastCompletedSession(rows, now);
+    if (!closed) {
+      throw new Error("Feed carries no completed session");
+    }
+    const lastClose = closed.close;
+    const sessionCloseDate = closed.date.slice(0, 10);
+    const gaps = computeGaps(rows, YEARS, now);
+    const delta = deltaPct(tokenLast, lastClose);
+
+    /* The read never fails the brief: when Qwen is unavailable the
+       fixed fallback string ships with readSource "fallback" and the
+       response still returns 200 */
+    const read = await deskRead({
+      ticker,
+      underlying,
+      last: tokenLast,
+      lastClose,
+      sessionCloseDate,
+      deltaPct: delta,
+      gaps,
+    });
 
     return NextResponse.json({
       ticker,
@@ -160,9 +194,12 @@ export async function GET(request: Request): Promise<Response> {
       price: {
         last: tokenLast,
         lastClose,
-        deltaPct: deltaPct(tokenLast, lastClose),
+        deltaPct: delta,
       },
-      gaps: computeGaps(rows, 5),
+      sessionCloseDate,
+      gaps,
+      read: read.read,
+      readSource: read.readSource,
       marketState: marketState(new Date()),
       generatedAt: new Date().toISOString(),
     });
