@@ -11,7 +11,8 @@ export { FALLBACK_STAMP, MODEL_STAMP };
    any file. */
 export const QWEN_URL = "https://hackathon.bitgetops.com/v1/chat/completions";
 export const QWEN_MODEL = "qwen3.8-max";
-export const QWEN_TIMEOUT_MS = 30000;
+export const TIMEOUT_MS = 60000;
+export const QWEN_TIMEOUT_MS = TIMEOUT_MS;
 
 /* Fixed fallback strings of the read zone */
 export const NO_KEY_READ =
@@ -88,7 +89,7 @@ export function buildReadPrompt(input: ReadInput): string {
   ].join("\n");
 }
 
-/* One call to the gateway with a hard 30 second timeout and one retry.
+/* One call to the gateway with a hard 60 second timeout and one retry.
    On a missing key, a failed status, a timeout or an unusable envelope
    the brief still returns, with the fixed fallback string, so the
    route keeps answering 200. */
@@ -109,7 +110,7 @@ export async function deskRead(
           Authorization: `Bearer ${key}`,
         },
         cache: "no-store",
-        signal: AbortSignal.timeout(QWEN_TIMEOUT_MS),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
         body: JSON.stringify({
           model: QWEN_MODEL,
           messages: [{ role: "user", content: buildReadPrompt(input) }],

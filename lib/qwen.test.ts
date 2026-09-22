@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FALLBACK_STAMP,
   MODEL_STAMP,
   NO_KEY_READ,
   NO_RESPONSE_READ,
+  TIMEOUT_MS,
   buildReadPrompt,
   deskRead,
   parseCompletion,
@@ -244,5 +245,39 @@ describe("deskRead", () => {
     const result = await deskRead(inputFixture(), async () => responseOf(502, {}));
     expect(result.read).not.toContain(KEY);
     expect(result.stamp).toBe(FALLBACK_STAMP);
+  });
+
+  it("budgets 60000 ms so a 35s model delay resolves without fallback", async () => {
+    expect(TIMEOUT_MS).toBe(60000);
+    process.env.QWEN_API_KEY = KEY;
+    vi.useFakeTimers();
+    try {
+      const slowFetch = (
+        _url: RequestInfo | URL,
+        init?: RequestInit,
+      ): Promise<Response> =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            resolve(responseOf(200, completion("Slow but steady read. Risk: a sharp gap.")));
+          }, 35000);
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(new DOMException("The operation was aborted", "TimeoutError"));
+            },
+            { once: true },
+          );
+        });
+      const pending = deskRead(inputFixture(), slowFetch);
+      await vi.advanceTimersByTimeAsync(80000);
+      const result = await pending;
+      expect(result.read).toBe("Slow but steady read. Risk: a sharp gap.");
+      expect(result.readSource).toBe("model");
+      expect(result.stamp).toBe(MODEL_STAMP);
+      expect(result.read).not.toBe(NO_RESPONSE_READ);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
