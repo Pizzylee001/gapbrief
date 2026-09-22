@@ -10,8 +10,9 @@ export type OptionRow = {
    between -2 and +2 percent. TRIM keeps its sentence and cites the
    worst historical bucket, the bucket that holds the largest share of
    the measured weekends, the outcome the trim most plausibly pays
-   for. HEDGE keeps its funding sentence; the funding rate is not
-   computed in this brief, so its number keeps the SAMPLE marker. */
+   for. HEDGE states the direct hedge; the funding rate is not
+   computed in this brief, so the sentence stays honest about
+   the rate without quoting one. */
 export function optionRows(gaps: GapResult): OptionRow[] {
   const flat = bucketSharePct(gaps, ["-2 to 0%", "0 to +2%"]);
   const worst = rankedBuckets(gaps)[0];
@@ -26,7 +27,7 @@ export function optionRows(gaps: GapResult): OptionRow[] {
     },
     {
       tag: "HEDGE",
-      text: "A short perp position of equal size has carried a funding cost near 0.01% per hour, SAMPLE.",
+      text: "A short perp position of equal size is the direct hedge, funding rates on Bitget vary, check the live rate before relying on it.",
     },
   ];
 }

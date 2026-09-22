@@ -33,10 +33,10 @@ describe("optionRows", () => {
     );
   });
 
-  it("HEDGE keeps its funding sentence with its SAMPLE marker", () => {
+  it("HEDGE stays honest about the funding rate it does not compute", () => {
     const hedge = optionRows(gapsFixture()).find((row) => row.tag === "HEDGE");
     expect(hedge?.text).toBe(
-      "A short perp position of equal size has carried a funding cost near 0.01% per hour, SAMPLE.",
+      "A short perp position of equal size is the direct hedge, funding rates on Bitget vary, check the live rate before relying on it.",
     );
   });
 
