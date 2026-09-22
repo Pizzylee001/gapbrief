@@ -24,9 +24,9 @@ const data = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GapBrief, Monday open stress-test desk for tokenized US stocks",
+  title: "GapBrief, Weekend Open Stress-Test Desk For Tokenized US Stocks",
   description:
-    "Live weekend gap history for Bitget rTokens, computed from five years of closes, with a model-written desk read. Not financial advice.",
+    "Live weekend open history for Bitget rTokens, computed from five years of closes, with a model-written desk read. Not financial advice.",
 };
 
 export const viewport: Viewport = {

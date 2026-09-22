@@ -162,7 +162,7 @@ describe("deskRead", () => {
     const body = JSON.parse(String(calls[0].init.body));
     expect(body.model).toBe("qwen3.8-max");
     expect(body.temperature).toBe(0.4);
-    expect(body.max_tokens).toBe(160);
+    expect(body.max_tokens).toBe(320);
     expect(body.enable_thinking).toBe(false);
     expect(body.messages).toEqual([
       { role: "user", content: expect.stringContaining("Ticker: RNVDAUSDT") },

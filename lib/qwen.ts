@@ -115,7 +115,7 @@ export async function deskRead(
           model: QWEN_MODEL,
           messages: [{ role: "user", content: buildReadPrompt(input) }],
           temperature: 0.4,
-          max_tokens: 160,
+          max_tokens: 320,
           enable_thinking: false,
         }),
       });
