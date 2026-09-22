@@ -95,9 +95,11 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const now = new Date();
     const tokenLast = await fetchTokenLast(ticker);
+    const equityStart = Date.now();
     const rows = (await fetchCandles(underlying, now)).sort((a, b) =>
       a.date.localeCompare(b.date),
     );
+    const equityMs = Date.now() - equityStart;
     if (rows.length < 2) {
       throw new Error("Not enough candles to compute a brief");
     }
@@ -117,6 +119,7 @@ export async function GET(request: Request): Promise<Response> {
     /* The read never fails the brief: when Qwen is unavailable the
        fixed fallback string ships with readSource "fallback" and the
        response still returns 200 */
+    const qwenStart = Date.now();
     const read = await deskRead({
       ticker,
       underlying,
@@ -126,6 +129,7 @@ export async function GET(request: Request): Promise<Response> {
       deltaPct: delta,
       gaps,
     });
+    console.log(`timing equity=${equityMs}ms qwen=${Date.now() - qwenStart}ms`);
 
     return NextResponse.json({
       ticker,
