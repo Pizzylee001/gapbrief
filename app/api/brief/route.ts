@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { pickLast } from "@/lib/bitget-parse";
 import { deltaPct } from "@/lib/delta";
+import { readCache, writeCache } from "@/lib/equity-cache";
 import {
   computeGaps,
   lastCompletedSession,
 } from "@/lib/gaps";
 import { fetchEquityRows } from "@/lib/mcp-page";
+import { fetchNasdaqRows } from "@/lib/nasdaq-fetch";
 import { marketState } from "@/lib/market-state";
 import { deskRead } from "@/lib/qwen";
 import { UNDERLYING_BY_RTOKEN } from "@/lib/symbols";
@@ -56,19 +58,47 @@ async function fetchTokenLast(symbol: string): Promise<number> {
   return pickLast(body);
 }
 
-/* Five-year window through the paged equity feed. One call walks every
-   page in response order, so the last close and the gap counts see the
-   full window, never page one only. */
+/* Five-year window with resilience: MCP first, then the Nasdaq keyless
+   fallback, then the last cached window. Live rows are sorted ascending
+   and cached. The Nasdaq path only covers weekdays, which is exactly
+   what weekend gaps measure, so no session is invented. */
 async function fetchCandles(
   underlying: string,
   now: Date,
-): Promise<import("@/lib/gaps").CandleRow[]> {
+): Promise<{ rows: import("@/lib/gaps").CandleRow[]; source: import("@/lib/types").HistorySource }> {
   const startDate = isoDaysAgo(now, YEARS * 365);
   /* The window ends yesterday UTC, so the final row of the feed is
      always a completed session, never today's mid-session snapshot
      with its partial close */
   const endDate = isoDaysAgo(now, 1);
-  return fetchEquityRows(underlying, startDate, endDate);
+  try {
+    const mcpRows = (await fetchEquityRows(underlying, startDate, endDate)).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    if (mcpRows.length > 0) {
+      writeCache(underlying, mcpRows, "mcp");
+      return { rows: mcpRows, source: "mcp" };
+    }
+  } catch {
+    /* Fall through to Nasdaq */
+  }
+  try {
+    const nasdaqRows = (await fetchNasdaqRows(underlying, startDate, endDate)).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    if (nasdaqRows.length > 0) {
+      writeCache(underlying, nasdaqRows, "nasdaq");
+      return { rows: nasdaqRows, source: "nasdaq" };
+    }
+  } catch {
+    /* Fall through to cache */
+  }
+  const cached = readCache(underlying);
+  if (cached && cached.rows.length > 0) {
+    const rows = [...cached.rows].sort((a, b) => a.date.localeCompare(b.date));
+    return { rows, source: "cache" };
+  }
+  throw new Error("Equity feed failed on every source");
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -96,9 +126,7 @@ export async function GET(request: Request): Promise<Response> {
     const now = new Date();
     const tokenLast = await fetchTokenLast(ticker);
     const equityStart = Date.now();
-    const rows = (await fetchCandles(underlying, now)).sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
+    const { rows, source } = await fetchCandles(underlying, now);
     const equityMs = Date.now() - equityStart;
     if (rows.length < 2) {
       throw new Error("Not enough candles to compute a brief");
@@ -145,6 +173,8 @@ export async function GET(request: Request): Promise<Response> {
       readSource: read.readSource,
       marketState: marketState(new Date()),
       generatedAt: new Date().toISOString(),
+      source,
+      historyAsOf: rows[rows.length - 1].date.slice(0, 10),
     });
   } catch {
     return NextResponse.json({ error: FEED_ERROR }, { status: 502 });

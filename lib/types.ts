@@ -6,6 +6,10 @@ export type MarketStateKind = "open" | "closed" | "weekend";
    back to the fixed unavailable string */
 export type ReadSource = "model" | "fallback";
 
+/* Which equity window the brief measured: the Bitget MCP feed, the
+   keyless Nasdaq fallback, or the last cached window */
+export type HistorySource = "mcp" | "nasdaq" | "cache";
+
 /* Stamps of the read zone. They travel with the payload contract so
    the server and the sheet agree on the wording. */
 export const MODEL_STAMP = "QWEN QWEN3.8-MAX";
@@ -14,6 +18,17 @@ export const FALLBACK_STAMP = "MODEL OFFLINE";
 /* Resolves the read zone stamp from the readSource of the payload */
 export function stampForSource(source: ReadSource): string {
   return source === "model" ? MODEL_STAMP : FALLBACK_STAMP;
+}
+
+/* Resolves the gap history zone stamp from the history source */
+export function historyStamp(source: HistorySource): string {
+  if (source === "nasdaq") {
+    return "NASDAQ DAILY FEED";
+  }
+  if (source === "cache") {
+    return "CACHED HISTORY";
+  }
+  return "BITGET US EQUITY FEED";
 }
 
 /* Payload of GET /api/brief, every field is server computed */
@@ -34,4 +49,7 @@ export type BriefData = {
   readSource: ReadSource;
   marketState: MarketStateKind;
   generatedAt: string;
+  /* Which equity window the brief measured, and its most recent date */
+  source: HistorySource;
+  historyAsOf: string;
 };

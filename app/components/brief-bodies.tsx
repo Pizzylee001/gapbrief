@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { GAP_BUCKETS } from "@/lib/gaps";
 import { optionRows } from "@/lib/options";
 import { splitFinalSentence } from "@/lib/read-text";
-import { stampForSource } from "@/lib/types";
+import { stampForSource, historyStamp } from "@/lib/types";
 import type { BriefData } from "@/lib/types";
 
 /* Direction color of each gap bucket, neg bars grow left of center */
@@ -232,13 +232,13 @@ export function PopulatedBody({
         </Zone>
         <Zone
           title={`Gap history, last ${total} weekends`}
-          stamp="BITGET US EQUITY FEED"
+          stamp={historyStamp(data.source)}
           delay={120}
         >
           <div
             className="flex flex-col gap-1.5"
             role="img"
-            aria-label="Distribution of Friday close to next week open gaps, Bitget US equity feed"
+            aria-label={`Distribution of Friday close to next week open gaps, ${historyStamp(data.source)}`}
           >
             {GAP_BUCKETS.map((label) => {
               const count = data.gaps.buckets[label];
@@ -266,7 +266,7 @@ export function PopulatedBody({
           </div>
           <table className="gb-visually-hidden">
             <caption>
-              Gap history, last five years, Bitget US equity feed
+              Gap history, last five years, {historyStamp(data.source)}
             </caption>
             <thead>
               <tr>
@@ -293,7 +293,7 @@ export function PopulatedBody({
         </Zone>
         <Zone
           title="Weekends that looked like this one"
-          stamp="BITGET US EQUITY FEED"
+          stamp={historyStamp(data.source)}
           delay={160}
         >
           <div className="flex flex-col">
